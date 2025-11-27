@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Результат теста</h2>
+<p>Курс: {{ course.title }} / Урок {{ lesson.order }} — {{ lesson.title }}</p>
+
+<p>Пользователь: {{ result.user_id }}</p>
+<p>Всего вопросов: {{ result.total_questions }}</p>
+<p>Правильных ответов: {{ result.correct_answers }}</p>
+<p><strong>Оценка: {{ "%.1f"|format(result.score) }}%</strong></p>
+
+<p style="margin-top: 16px;">
+    <a class="btn" href="/ui/courses/{{ course.id }}">Вернуться к курсу</a>
+</p>
+<p style="margin-top: 8px;">
+    <a class="btn secondary" href="/ui/courses">← К списку всех курсов</a>
+</p>
+{% endblock %}

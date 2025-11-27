@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ course.title }}</h2>
+{% if course.description %}
+<p>{{ course.description }}</p>
+{% endif %}
+
+{% if is_completed %}
+<p><strong>Курс завершён этим пользователем.</strong></p>
+{% elif can_complete_course %}
+<form action="/ui/courses/{{ course.id }}/complete" method="post" style="margin-bottom: 16px;">
+    <button type="submit" class="btn">Завершить курс</button>
+</form>
+{% else %}
+<p><em>Чтобы завершить курс, пройдите все уроки.</em></p>
+{% endif %}
+
+<h3>Уроки курса</h3>
+{% for lesson in lessons %}
+<div class="lesson-card">
+    <strong>Урок {{ lesson.order }}: {{ lesson.title }}</strong>
+    <p><a class="btn" href="/ui/lessons/{{ lesson.id }}?user_id={{ user_id }}">Перейти к уроку</a></p>
+</div>
+{% endfor %}
+
+{% if not lessons %}
+<p>В курсе пока нет уроков.</p>
+{% endif %}
+
+<hr>
+<h3>Панель преподавателя</h3>
+<p>
+    <a class="btn" href="/ui/teacher/courses/{{ course.id }}/edit">Редактировать курс</a>
+</p>
+<p>
+    <a class="btn" href="/ui/teacher/courses/{{ course.id }}/lessons/new">
+        Добавить урок
+    </a>
+</p>
+<form action="/ui/teacher/courses/{{ course.id }}/delete" method="post"
+      onsubmit="return confirm('Удалить курс и все его уроки и тесты?');">
+    <button type="submit" class="btn secondary">Удалить курс</button>
+</form>
+
+<p style="margin-top: 16px;">
+    <a class="btn secondary" href="/ui/courses">← Назад к списку курсов</a>
+</p>
+{% endblock %}

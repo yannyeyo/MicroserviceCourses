@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Список курсов</h2>
+
+<form method="get" action="/ui/courses" style="margin-bottom: 16px;">
+    <div style="margin-bottom: 8px;">
+        <input type="text" name="q" placeholder="Поиск по названию или описанию"
+               value="{{ q }}" style="width: 70%; padding: 6px;">
+        <button type="submit" class="btn">Найти</button>
+    </div>
+
+    <a href="/ui/teacher/courses/new" class="btn secondary">
+        Создать курс (преподаватель)
+    </a>
+</form>
+
+{% for course in courses %}
+<div class="course-card">
+    <h3><a href="/ui/courses/{{ course.id }}">{{ course.title }}</a></h3>
+    {% if course.description %}
+        <p>{{ course.description }}</p>
+    {% endif %}
+    <p>Статус: {{ "опубликован" if course.is_published else "черновик" }}</p>
+    <a class="btn" href="/ui/courses/{{ course.id }}">Открыть курс</a>
+</div>
+{% endfor %}
+
+{% if not courses %}
+<p>Курсы не найдены.</p>
+{% endif %}
+{% endblock %}

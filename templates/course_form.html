@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ title }}</h2>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+<form method="post">
+    <div style="margin-bottom: 10px;">
+        <label>Название курса:<br>
+            <input type="text" name="title" style="width: 100%; padding: 6px;"
+                   value="{{ course.title if course else '' }}">
+        </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>Описание:<br>
+            <textarea name="description" rows="4" style="width: 100%; padding: 6px;">{{ course.description if course else '' }}</textarea>
+        </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>
+            <input type="checkbox" name="is_published"
+                   {% if course and course.is_published %}checked{% endif %}>
+            Опубликован
+        </label>
+    </div>
+
+    <button type="submit" class="btn">
+        {% if mode == "edit" %}Сохранить изменения{% else %}Создать курс{% endif %}
+    </button>
+    <a href="/ui/courses" class="btn secondary" style="margin-left: 8px;">Отмена</a>
+</form>
+{% endblock %}

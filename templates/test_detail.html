@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Тест: {{ test.title }}</h2>
+<p>Курс: {{ course.title }} / Урок {{ lesson.order }} — {{ lesson.title }}</p>
+
+<form action="/ui/tests/{{ test.id }}/submit" method="post">
+    <input type="hidden" name="user_id" value="{{ user_id }}">
+
+    {% for q in test.questions %}
+    <div class="question-block">
+        <p><strong>Вопрос {{ loop.index }}:</strong> {{ q.text }}</p>
+        {% for opt in q.options %}
+        <div>
+            <label>
+                <input type="radio" name="q_{{ q.id }}" value="{{ opt.id }}">
+                {{ opt.text }}
+            </label>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn">Отправить ответы</button>
+</form>
+
+<p style="margin-top: 16px;">
+    <a class="btn secondary" href="/ui/lessons/{{ lesson.id }}">← Назад к уроку</a>
+</p>
+{% endblock %}

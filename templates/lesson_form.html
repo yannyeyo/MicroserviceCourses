@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ title }}</h2>
+<p>Курс: {{ course.title }}</p>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+<form method="post">
+    <div style="margin-bottom: 10px;">
+        <label>Название урока:<br>
+            <input type="text" name="title" style="width: 100%; padding: 6px;">
+        </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>Содержание урока:<br>
+            <textarea name="content" rows="6" style="width: 100%; padding: 6px;"></textarea>
+        </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>Порядок урока в курсе:<br>
+            <input type="number" name="order" min="1"
+                   value="{{ default_order }}" style="width: 80px; padding: 4px;">
+        </label>
+    </div>
+
+    <button type="submit" class="btn">Сохранить урок</button>
+    <a href="/ui/courses/{{ course.id }}" class="btn secondary" style="margin-left: 8px;">Отмена</a>
+</form>
+{% endblock %}

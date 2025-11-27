@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ title }}</h2>
+<p>Курс: {{ course.title }} / Урок {{ lesson.order }} — {{ lesson.title }}</p>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+<form method="post">
+    <div style="margin-bottom: 10px;">
+        <label>Название теста:<br>
+            <input type="text" name="test_title" style="width: 100%; padding: 6px;"
+                   value="{{ test_title }}">
+        </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>Текст вопроса:<br>
+            <textarea name="question_text" rows="4" style="width: 100%; padding: 6px;">{{ question_text }}</textarea>
+        </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <p><strong>Варианты ответа (минимум два):</strong></p>
+        <label>
+            <input type="radio" name="correct_opt" value="1"
+                   {% if correct_num == 1 %}checked{% endif %}>
+            Правильный
+        </label>
+        <input type="text" name="opt1" style="width: 80%; padding: 4px;" value="{{ opt1 }}"><br><br>
+
+        <label>
+            <input type="radio" name="correct_opt" value="2"
+                   {% if correct_num == 2 %}checked{% endif %}>
+            Правильный
+        </label>
+        <input type="text" name="opt2" style="width: 80%; padding: 4px;" value="{{ opt2 }}"><br><br>
+
+        <label>
+            <input type="radio" name="correct_opt" value="3"
+                   {% if correct_num == 3 %}checked{% endif %}>
+            Правильный
+        </label>
+        <input type="text" name="opt3" style="width: 80%; padding: 4px;" value="{{ opt3 }}">
+    </div>
+
+    <button type="submit" class="btn">Сохранить тест</button>
+    <a href="/ui/lessons/{{ lesson.id }}" class="btn secondary" style="margin-left: 8px;">Отмена</a>
+</form>
+{% endblock %}

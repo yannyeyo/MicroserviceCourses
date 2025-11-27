@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ course.title }} — урок {{ lesson.order }}</h2>
+<h3>{{ lesson.title }}</h3>
+
+<p>{{ lesson.content }}</p>
+
+{% if saved_result %}
+<div class="question-block">
+    <p><strong>Последний результат теста:</strong></p>
+    <p>Правильных ответов: {{ saved_result.correct_answers }} из {{ saved_result.total_questions }}</p>
+    <p>Оценка: {{ "%.1f"|format(saved_result.score) }}%</p>
+</div>
+{% endif %}
+
+<form action="/ui/lessons/{{ lesson.id }}/test" method="get">
+    <input type="hidden" name="user_id" value="{{ user_id }}">
+    <button type="submit" class="btn">Завершить урок и перейти к тесту</button>
+</form>
+<p style="margin-top: 16px;">
+    <a class="btn" href="/ui/teacher/lessons/{{ lesson.id }}/test/edit">
+        Создать / изменить тест (преподаватель)
+    </a>
+</p>
+<p style="margin-top: 16px;">
+    <a class="btn secondary" href="/ui/courses/{{ course.id }}">← Назад к курсу</a>
+</p>
+{% endblock %}
