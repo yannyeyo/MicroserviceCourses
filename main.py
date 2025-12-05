@@ -6,6 +6,30 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+# ---- SQLAlchemy / PostgreSQL ----
+from sqlalchemy import create_engine, Column, String, Boolean, Text
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+
+# !!! ПОДСТАВЬ СВОЙ URL К БАЗЕ !!!
+DATABASE_URL = "postgresql+psycopg2://postgres:11092003yaN@localhost:5432/courses_db"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
+
+
+class CourseDB(Base):
+    __tablename__ = "courses"
+
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    is_published = Column(Boolean, default=False)
+
+
+# ---------------- FASTAPI ----------------
+
 app = FastAPI(title="Learning Courses Microservice")
 templates = Jinja2Templates(directory="templates")
 
@@ -16,6 +40,18 @@ class Course(BaseModel):
     title: str
     description: Optional[str] = None
     is_published: bool = False
+
+
+class CourseCreateInput(BaseModel):
+    title: str
+    description: Optional[str] = None
+    is_published: bool = False
+
+
+class CourseUpdateInput(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    is_published: Optional[bool] = None
 
 
 class Lesson(BaseModel):
@@ -53,138 +89,167 @@ class TestResult(BaseModel):
     score: float  # 0..100
 
 
-# =================== "БД" в памяти ===================
+# =================== "БД" в памяти (кеш и остальное) ===================
 
+# курсы в памяти, синхронизируются с PostgreSQL
 courses: Dict[UUID, Course] = {}
+
+# уроки и тесты пока в памяти
 lessons: Dict[UUID, Lesson] = {}
 tests: Dict[UUID, Test] = {}
 
-# уроки, завершённые пользователем
 user_completed_lessons: Dict[str, Set[UUID]] = {}
-# курсы, завершённые пользователем
 user_completed_courses: Dict[str, Set[UUID]] = {}
-# сохранённые результаты тестов: (user_id, test_id) -> результат
 test_results: Dict[Tuple[str, UUID], TestResult] = {}
 
 
-def create_demo_data():
-    """Создаём демо-курсы, уроки и тесты при запуске."""
-    global courses, lessons, tests
-
+def _load_courses_from_db():
+    """Загружаем все курсы из PostgreSQL в словарь courses."""
     courses.clear()
+    with SessionLocal() as db:
+        for c in db.query(CourseDB).all():
+            courses[c.id] = Course(
+                id=c.id,
+                title=c.title,
+                description=c.description,
+                is_published=c.is_published,
+            )
+
+
+def create_demo_data():
+    """Создаём таблицу, демо-курсы (если их нет в БД), уроки и тесты в памяти."""
+    Base.metadata.create_all(bind=engine)
+
+    # если в БД нет курсов — создаём демо-записи
+    with SessionLocal() as db:
+        if db.query(CourseDB).count() == 0:
+            c1_id = uuid4()
+            c2_id = uuid4()
+
+            db.add_all(
+                [
+                    CourseDB(
+                        id=c1_id,
+                        title="Python для начинающих",
+                        description="Основы языка Python",
+                        is_published=True,
+                    ),
+                    CourseDB(
+                        id=c2_id,
+                        title="Веб-разработка",
+                        description="Базовые понятия веба",
+                        is_published=True,
+                    ),
+                ]
+            )
+            db.commit()
+
+    # загружаем все курсы из БД в память
+    _load_courses_from_db()
+
+    # очищаем остальные структуры
     lessons.clear()
     tests.clear()
     user_completed_lessons.clear()
     user_completed_courses.clear()
     test_results.clear()
 
-    # --- Курс 1 ---
-    c1_id = uuid4()
-    courses[c1_id] = Course(
-        id=c1_id,
-        title="Python для начинающих",
-        description="Основы языка Python",
-        is_published=True,
-    )
+    # находим наши демо-курсы по названию
+    c1 = next((c for c in courses.values() if c.title == "Python для начинающих"), None)
+    c2 = next((c for c in courses.values() if c.title == "Веб-разработка"), None)
 
-    l1_id = uuid4()
-    lessons[l1_id] = Lesson(
-        id=l1_id,
-        course_id=c1_id,
-        title="Введение в Python",
-        content="Что такое Python, где используется, установка и первый скрипт.",
-        order=1,
-    )
+    if c1:
+        # --- курс Python ---
+        l1_id = uuid4()
+        lessons[l1_id] = Lesson(
+            id=l1_id,
+            course_id=c1.id,
+            title="Введение в Python",
+            content="Что такое Python, где используется, установка и первый скрипт.",
+            order=1,
+        )
 
-    l2_id = uuid4()
-    lessons[l2_id] = Lesson(
-        id=l2_id,
-        course_id=c1_id,
-        title="Типы данных и переменные",
-        content="Числа, строки, списки, словари. Примеры кода.",
-        order=2,
-    )
+        l2_id = uuid4()
+        lessons[l2_id] = Lesson(
+            id=l2_id,
+            course_id=c1.id,
+            title="Типы данных и переменные",
+            content="Числа, строки, списки, словари. Примеры кода.",
+            order=2,
+        )
 
-    # Тест к уроку 1
-    t1_id = uuid4()
-    q1_id = uuid4()
-    q1_opts = [
-        AnswerOption(id=uuid4(), text="Язык программирования", is_correct=True),
-        AnswerOption(id=uuid4(), text="ОС Windows", is_correct=False),
-        AnswerOption(id=uuid4(), text="База данных", is_correct=False),
-    ]
-    tests[t1_id] = Test(
-        id=t1_id,
-        lesson_id=l1_id,
-        title="Тест к уроку 'Введение в Python'",
-        questions=[
-            Question(
-                id=q1_id,
-                text="Python — это...",
-                options=q1_opts,
-            )
-        ],
-    )
+        # тест к уроку 1
+        t1_id = uuid4()
+        q1_id = uuid4()
+        q1_opts = [
+            AnswerOption(id=uuid4(), text="Язык программирования", is_correct=True),
+            AnswerOption(id=uuid4(), text="ОС Windows", is_correct=False),
+            AnswerOption(id=uuid4(), text="База данных", is_correct=False),
+        ]
+        tests[t1_id] = Test(
+            id=t1_id,
+            lesson_id=l1_id,
+            title="Тест к уроку 'Введение в Python'",
+            questions=[
+                Question(
+                    id=q1_id,
+                    text="Python — это...",
+                    options=q1_opts,
+                )
+            ],
+        )
 
-    # Тест к уроку 2
-    t2_id = uuid4()
-    q2_id = uuid4()
-    q2_opts = [
-        AnswerOption(id=uuid4(), text="int, float, str, list, dict", is_correct=True),
-        AnswerOption(id=uuid4(), text="http, tcp, udp", is_correct=False),
-        AnswerOption(id=uuid4(), text="ssd, hdd, ram", is_correct=False),
-    ]
-    tests[t2_id] = Test(
-        id=t2_id,
-        lesson_id=l2_id,
-        title="Тест к уроку 'Типы данных и переменные'",
-        questions=[
-            Question(
-                id=q2_id,
-                text="Какие из перечисленных являются типами данных в Python?",
-                options=q2_opts,
-            )
-        ],
-    )
+        # тест к уроку 2
+        t2_id = uuid4()
+        q2_id = uuid4()
+        q2_opts = [
+            AnswerOption(id=uuid4(), text="int, float, str, list, dict", is_correct=True),
+            AnswerOption(id=uuid4(), text="http, tcp, udp", is_correct=False),
+            AnswerOption(id=uuid4(), text="ssd, hdd, ram", is_correct=False),
+        ]
+        tests[t2_id] = Test(
+            id=t2_id,
+            lesson_id=l2_id,
+            title="Тест к уроку 'Типы данных и переменные'",
+            questions=[
+                Question(
+                    id=q2_id,
+                    text="Какие из перечисленных являются типами данных в Python?",
+                    options=q2_opts,
+                )
+            ],
+        )
 
-    # --- Курс 2 ---
-    c2_id = uuid4()
-    courses[c2_id] = Course(
-        id=c2_id,
-        title="Веб-разработка",
-        description="Базовые понятия веба",
-        is_published=True,
-    )
+    if c2:
+        # --- курс Веб-разработка ---
+        l3_id = uuid4()
+        lessons[l3_id] = Lesson(
+            id=l3_id,
+            course_id=c2.id,
+            title="Как работает веб",
+            content="HTTP, браузер, сервер, запрос-ответ.",
+            order=1,
+        )
 
-    l3_id = uuid4()
-    lessons[l3_id] = Lesson(
-        id=l3_id,
-        course_id=c2_id,
-        title="Как работает веб",
-        content="HTTP, браузер, сервер, запрос-ответ.",
-        order=1,
-    )
-
-    # Тест к уроку 3
-    t3_id = uuid4()
-    q3_id = uuid4()
-    q3_opts = [
-        AnswerOption(id=uuid4(), text="HTTP", is_correct=True),
-        AnswerOption(id=uuid4(), text="FTP только", is_correct=False),
-        AnswerOption(id=uuid4(), text="BIOS", is_correct=False),
-    ]
-    tests[t3_id] = Test(
-        id=t3_id,
-        lesson_id=l3_id,
-        title="Тест к уроку 'Как работает веб'",
-        questions=[
-            Question(
-                id=q3_id,
-                text="Какой протокол чаще всего используется для веб-сайтов?",
-                options=q3_opts,
-            )
-        ],
-    )
+        t3_id = uuid4()
+        q3_id = uuid4()
+        q3_opts = [
+            AnswerOption(id=uuid4(), text="HTTP", is_correct=True),
+            AnswerOption(id=uuid4(), text="FTP только", is_correct=False),
+            AnswerOption(id=uuid4(), text="BIOS", is_correct=False),
+        ]
+        tests[t3_id] = Test(
+            id=t3_id,
+            lesson_id=l3_id,
+            title="Тест к уроку 'Как работает веб'",
+            questions=[
+                Question(
+                    id=q3_id,
+                    text="Какой протокол чаще всего используется для веб-сайтов?",
+                    options=q3_opts,
+                )
+            ],
+        )
 
 
 @app.on_event("startup")
@@ -223,11 +288,9 @@ def find_test_for_lesson_or_none(lesson_id: UUID) -> Optional[Test]:
 
 
 def update_course_completion_for_user(user_id: str, course_id: UUID):
-    """Если ученик прошёл все уроки курса, помечаем курс как завершённый."""
     course_lesson_ids = {l.id for l in lessons.values() if l.course_id == course_id}
     if not course_lesson_ids:
         return
-
     completed_lessons = user_completed_lessons.get(user_id, set())
     if course_lesson_ids.issubset(completed_lessons):
         user_courses = user_completed_courses.setdefault(user_id, set())
@@ -236,14 +299,121 @@ def update_course_completion_for_user(user_id: str, course_id: UUID):
 
 DEFAULT_USER = "demo_user"
 
+# =======================================================================
+#                            API ЭНДПОИНТЫ (JSON)
+# =======================================================================
 
-# =================== UI: список и поиск курсов ===================
+@app.get("/api/courses", response_model=List[Course])
+def api_list_courses():
+    """Список курсов (JSON)."""
+    return list(courses.values())
+
+
+@app.get("/api/courses/{course_id}", response_model=Course)
+def api_get_course(course_id: UUID):
+    """Получить курс по id (JSON)."""
+    return get_course_or_404(course_id)
+
+
+@app.post("/api/courses", response_model=Course, status_code=201)
+def api_create_course(data: CourseCreateInput):
+    """Создать курс (JSON)."""
+    course_id = uuid4()
+    course = Course(
+        id=course_id,
+        title=data.title,
+        description=data.description,
+        is_published=data.is_published,
+    )
+    courses[course_id] = course
+
+    # пишем в PostgreSQL
+    with SessionLocal() as db:
+        db_course = CourseDB(
+            id=course_id,
+            title=course.title,
+            description=course.description,
+            is_published=course.is_published,
+        )
+        db.add(db_course)
+        db.commit()
+
+    return course
+
+
+@app.put("/api/courses/{course_id}", response_model=Course)
+def api_update_course(course_id: UUID, data: CourseUpdateInput):
+    """Обновить курс (JSON)."""
+    course = get_course_or_404(course_id)
+
+    updated = course.dict()
+    if data.title is not None:
+        updated["title"] = data.title
+    if data.description is not None:
+        updated["description"] = data.description
+    if data.is_published is not None:
+        updated["is_published"] = data.is_published
+
+    course = Course(**updated)
+    courses[course_id] = course
+
+    with SessionLocal() as db:
+        db_course = db.query(CourseDB).filter(CourseDB.id == course_id).first()
+        if not db_course:
+            raise HTTPException(404, "Курс не найден в БД")
+        db_course.title = course.title
+        db_course.description = course.description
+        db_course.is_published = course.is_published
+        db.commit()
+
+    return course
+
+
+@app.delete("/api/courses/{course_id}", status_code=204)
+def api_delete_course(course_id: UUID):
+    """Удалить курс (JSON)."""
+    if course_id not in courses:
+        raise HTTPException(404, "Курс не найден")
+
+    # логика как в UI-удалении
+    lesson_ids = [l.id for l in lessons.values() if l.course_id == course_id]
+    test_ids = [t.id for t in tests.values() if t.lesson_id in lesson_ids]
+
+    for tid in test_ids:
+        tests.pop(tid, None)
+    keys_to_delete = [key for key in test_results if key[1] in test_ids]
+    for key in keys_to_delete:
+        del test_results[key]
+    for lid in lesson_ids:
+        lessons.pop(lid, None)
+
+    courses.pop(course_id, None)
+
+    for _user, lset in user_completed_lessons.items():
+        lset.difference_update(lesson_ids)
+    for _user, cset in user_completed_courses.items():
+        cset.discard(course_id)
+
+    # удаляем из БД
+    with SessionLocal() as db:
+        db_course = db.query(CourseDB).filter(CourseDB.id == course_id).first()
+        if db_course:
+            db.delete(db_course)
+            db.commit()
+
+    return
+
+
+# =======================================================================
+#                            UI: список и поиск курсов
+# =======================================================================
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/ui/courses", response_class=HTMLResponse)
 async def ui_courses(request: Request, q: Optional[str] = None):
-    """Список всех курсов + поиск по названию/описанию."""
+    """Список всех курсов + поиск по названию/описанию (HTML)."""
     query = (q or "").strip().lower()
+
     if query:
         filtered = [
             c for c in courses.values()
@@ -272,7 +442,6 @@ async def ui_course_detail(
     request: Request,
     user_id: str = DEFAULT_USER,
 ):
-    """Страница курса с уроками."""
     course = get_course_or_404(course_id)
     course_lessons = sorted(
         [l for l in lessons.values() if l.course_id == course_id],
@@ -284,7 +453,9 @@ async def ui_course_detail(
 
     course_lesson_ids = {l.id for l in course_lessons}
     user_completed = user_completed_lessons.get(user_id, set())
-    can_complete_course = bool(course_lesson_ids) and course_lesson_ids.issubset(user_completed)
+    can_complete_course = bool(course_lesson_ids) and course_lesson_ids.issubset(
+        user_completed
+    )
 
     return templates.TemplateResponse(
         "course_detail.html",
@@ -306,7 +477,6 @@ async def ui_complete_course(
     request: Request,
     user_id: str = DEFAULT_USER,
 ):
-    """Ученик завершает курс, НО только если все уроки уже пройдены."""
     get_course_or_404(course_id)
     update_course_completion_for_user(user_id, course_id)
     return RedirectResponse(
@@ -323,7 +493,6 @@ async def ui_lesson_detail(
     request: Request,
     user_id: str = DEFAULT_USER,
 ):
-    """Страница урока."""
     lesson = get_lesson_or_404(lesson_id)
     course = get_course_or_404(lesson.course_id)
 
@@ -354,7 +523,6 @@ async def ui_lesson_test(
     request: Request,
     user_id: str = DEFAULT_USER,
 ):
-    """Ученик завершает урок и переходит к тесту."""
     lesson = get_lesson_or_404(lesson_id)
     course = get_course_or_404(lesson.course_id)
 
@@ -380,7 +548,6 @@ async def ui_lesson_test(
 
 @app.post("/ui/tests/{test_id}/submit", response_class=HTMLResponse)
 async def ui_submit_test(test_id: UUID, request: Request):
-    """Обработка результатов теста, сохранение и вывод страницы с результатом."""
     form = await request.form()
     user_id = form.get("user_id", DEFAULT_USER)
 
@@ -418,7 +585,6 @@ async def ui_submit_test(test_id: UUID, request: Request):
         correct_answers=correct,
         score=score,
     )
-
     test_results[(user_id, test.id)] = result
 
     lesson = get_lesson_or_404(test.lesson_id)
@@ -436,7 +602,7 @@ async def ui_submit_test(test_id: UUID, request: Request):
     )
 
 
-# =================== UI: создание / редактирование / удаление курса (преподаватель) ===================
+# =================== UI: управление курсами (преподаватель) ===================
 
 @app.get("/ui/teacher/courses/new", response_class=HTMLResponse)
 async def ui_new_course(request: Request):
@@ -471,12 +637,23 @@ async def ui_new_course_post(request: Request):
         )
 
     course_id = uuid4()
-    courses[course_id] = Course(
+    course = Course(
         id=course_id,
         title=title,
         description=description,
         is_published=is_published,
     )
+    courses[course_id] = course
+
+    with SessionLocal() as db:
+        db_course = CourseDB(
+            id=course_id,
+            title=title,
+            description=description,
+            is_published=is_published,
+        )
+        db.add(db_course)
+        db.commit()
 
     return RedirectResponse(
         url=f"/ui/courses/{course_id}",
@@ -518,10 +695,20 @@ async def ui_edit_course_post(course_id: UUID, request: Request):
             },
         )
 
-    course.title = title
-    course.description = description
-    course.is_published = is_published
+    updated = course.dict()
+    updated["title"] = title
+    updated["description"] = description
+    updated["is_published"] = is_published
+    course = Course(**updated)
     courses[course_id] = course
+
+    with SessionLocal() as db:
+        db_course = db.query(CourseDB).filter(CourseDB.id == course_id).first()
+        if db_course:
+            db_course.title = title
+            db_course.description = description
+            db_course.is_published = is_published
+            db.commit()
 
     return RedirectResponse(
         url=f"/ui/courses/{course_id}",
@@ -531,18 +718,18 @@ async def ui_edit_course_post(course_id: UUID, request: Request):
 
 @app.post("/ui/teacher/courses/{course_id}/delete")
 async def ui_delete_course(course_id: UUID, request: Request):
-    get_course_or_404(course_id)
+    if course_id not in courses:
+        raise HTTPException(status_code=404, detail="Курс не найден")
 
+    # связанные уроки и тесты
     lesson_ids = [l.id for l in lessons.values() if l.course_id == course_id]
     test_ids = [t.id for t in tests.values() if t.lesson_id in lesson_ids]
 
     for tid in test_ids:
         tests.pop(tid, None)
-
     keys_to_delete = [key for key in test_results if key[1] in test_ids]
     for key in keys_to_delete:
         del test_results[key]
-
     for lid in lesson_ids:
         lessons.pop(lid, None)
 
@@ -553,13 +740,19 @@ async def ui_delete_course(course_id: UUID, request: Request):
     for _user, cset in user_completed_courses.items():
         cset.discard(course_id)
 
+    with SessionLocal() as db:
+        db_course = db.query(CourseDB).filter(CourseDB.id == course_id).first()
+        if db_course:
+            db.delete(db_course)
+            db.commit()
+
     return RedirectResponse(
         url="/ui/courses",
         status_code=302,
     )
 
 
-# =================== UI: создание урока (преподаватель) ===================
+# =================== UI: создание урока и теста (преподаватель) ===================
 
 @app.get("/ui/teacher/courses/{course_id}/lessons/new", response_class=HTMLResponse)
 async def ui_new_lesson(course_id: UUID, request: Request):
@@ -618,8 +811,6 @@ async def ui_new_lesson_post(course_id: UUID, request: Request):
         status_code=302,
     )
 
-
-# =================== UI: создание/редактирование теста к уроку (преподаватель) ===================
 
 @app.get("/ui/teacher/lessons/{lesson_id}/test/edit", response_class=HTMLResponse)
 async def ui_edit_lesson_test(lesson_id: UUID, request: Request):
