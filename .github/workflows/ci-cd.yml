@@ -10,7 +10,13 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: 11092003yaN
           POSTGRES_DB: courses_db
-        # ports можно не указывать, мы ходим к сервису по имени "postgres"
+        ports:
+          - 5432:5432               # <<< ВАЖНО: проброс порта на localhost runner'а
+        options: >-
+          --health-cmd "pg_isready -U postgres -d courses_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout repository
@@ -19,7 +25,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12"  # можешь оставить 3.11, это не влияет на ошибку
 
       - name: Install dependencies
         run: |
@@ -33,7 +39,7 @@ jobs:
 
       - name: Run pytest
         env:
-          # ВАЖНО: пароль и БД как у тебя локально, хост = имя сервиса postgres
-          DATABASE_URL: postgresql+psycopg2://postgres:11092003yaN@postgres:5432/courses_db
+          # Можно вообще не задавать, но если хочешь — оставляем такой же, как в main.py
+          DATABASE_URL: postgresql+psycopg2://postgres:11092003yaN@localhost:5432/courses_db
         run: |
           pytest -q
