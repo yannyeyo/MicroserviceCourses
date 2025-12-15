@@ -66,5 +66,5 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest -q -k "not integration"
+          pytest -q --ignore=test_integration.py
 
