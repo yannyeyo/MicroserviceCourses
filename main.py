@@ -1,6 +1,6 @@
 from uuid import uuid4, UUID
 from typing import List, Dict, Optional, Set, Tuple
-
+import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -14,7 +14,11 @@ from logging_config import setup_logging
 from observability import HTTPLoggingMiddleware, setup_metrics_endpoint
 
 
-DATABASE_URL = "postgresql+psycopg2://postgres:11092003yaN@localhost:5432/courses_db"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+psycopg2://postgres:11092003yaN@localhost:5432/courses_db",
+)
+
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

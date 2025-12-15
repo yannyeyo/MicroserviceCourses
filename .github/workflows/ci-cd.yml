@@ -3,7 +3,6 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
 
-    # поднимаем PostgreSQL как сервис
     services:
       postgres:
         image: postgres:15
@@ -14,9 +13,8 @@ jobs:
         ports:
           - 5432:5432
 
-    # строка подключения, которой пользуется приложение
     env:
-      DATABASE_URL: postgresql+psycopg2://postgres:123@localhost:5432/courses_db
+      DATABASE_URL: postgresql+psycopg2://postgres:123@postgres:5432/courses_db
 
     steps:
       - name: Checkout repository
@@ -32,7 +30,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # простое ожидание, чтобы Postgres гарантированно успел запуститься
       - name: Wait for PostgreSQL
         run: |
           echo "Waiting for PostgreSQL to start..."
