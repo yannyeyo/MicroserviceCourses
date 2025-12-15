@@ -16,7 +16,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: 123
+          POSTGRES_PASSWORD: 11092003yaN
           POSTGRES_DB: courses_db
 
     steps:
