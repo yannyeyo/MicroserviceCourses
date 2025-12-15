@@ -19,11 +19,9 @@ DATABASE_URL = os.getenv(
     "postgresql+psycopg2://postgres:11092003yaN@localhost:5432/courses_db",
 )
 
-
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
-
 
 class CourseDB(Base):
     __tablename__ = "courses"
