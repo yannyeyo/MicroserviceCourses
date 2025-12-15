@@ -6,12 +6,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-# ---- SQLAlchemy / PostgreSQL ----
 from sqlalchemy import create_engine, Column, String, Boolean, Text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
-# !!! ПОДСТАВЬ СВОЙ URL К БАЗЕ !!!
+from logging_config import setup_logging
+from observability import HTTPLoggingMiddleware, setup_metrics_endpoint
+
+
 DATABASE_URL = "postgresql+psycopg2://postgres:11092003yaN@localhost:5432/courses_db"
 
 engine = create_engine(DATABASE_URL)
@@ -31,6 +33,20 @@ class CourseDB(Base):
 # ---------------- FASTAPI ----------------
 
 app = FastAPI(title="Learning Courses Microservice")
+# Логирование и метрики
+SERVICE_NAME = "course-service"
+
+logger = setup_logging(SERVICE_NAME)
+app.add_middleware(
+    HTTPLoggingMiddleware,
+    service_name=SERVICE_NAME,
+    logger=logger,
+)
+
+setup_metrics_endpoint(app)
+
+logger.info("Service started")
+
 templates = Jinja2Templates(directory="templates")
 
 # =================== Pydantic-модели ===================
@@ -117,7 +133,6 @@ def _load_courses_from_db():
 
 
 def create_demo_data():
-    """Создаём таблицу, демо-курсы (если их нет в БД), уроки и тесты в памяти."""
     Base.metadata.create_all(bind=engine)
 
     # если в БД нет курсов — создаём демо-записи
@@ -144,10 +159,8 @@ def create_demo_data():
             )
             db.commit()
 
-    # загружаем все курсы из БД в память
     _load_courses_from_db()
 
-    # очищаем остальные структуры
     lessons.clear()
     tests.clear()
     user_completed_lessons.clear()
@@ -299,25 +312,20 @@ def update_course_completion_for_user(user_id: str, course_id: UUID):
 
 DEFAULT_USER = "demo_user"
 
-# =======================================================================
-#                            API ЭНДПОИНТЫ (JSON)
-# =======================================================================
+#                            API ЭНДПОИНТЫ
 
 @app.get("/api/courses", response_model=List[Course])
 def api_list_courses():
-    """Список курсов (JSON)."""
     return list(courses.values())
 
 
 @app.get("/api/courses/{course_id}", response_model=Course)
 def api_get_course(course_id: UUID):
-    """Получить курс по id (JSON)."""
     return get_course_or_404(course_id)
 
 
 @app.post("/api/courses", response_model=Course, status_code=201)
 def api_create_course(data: CourseCreateInput):
-    """Создать курс (JSON)."""
     course_id = uuid4()
     course = Course(
         id=course_id,
@@ -327,7 +335,6 @@ def api_create_course(data: CourseCreateInput):
     )
     courses[course_id] = course
 
-    # пишем в PostgreSQL
     with SessionLocal() as db:
         db_course = CourseDB(
             id=course_id,
@@ -404,9 +411,7 @@ def api_delete_course(course_id: UUID):
     return
 
 
-# =======================================================================
 #                            UI: список и поиск курсов
-# =======================================================================
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/ui/courses", response_class=HTMLResponse)
