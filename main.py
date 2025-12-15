@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from logging_config import setup_logging
 from observability import HTTPLoggingMiddleware, setup_metrics_endpoint
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "11092003yaN")
@@ -24,8 +24,6 @@ DATABASE_URL = (
 )
 
 engine = create_engine(DATABASE_URL, future=True)
-
-engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
