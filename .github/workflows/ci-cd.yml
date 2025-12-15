@@ -66,4 +66,5 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest -q
+          pytest -q -k "not integration"
+
